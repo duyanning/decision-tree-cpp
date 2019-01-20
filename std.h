@@ -20,6 +20,7 @@
 #include <unordered_set>
 #include <regex>
 #include <functional>
+#include <cmath>
 
 
 #include <boost/any.hpp>
