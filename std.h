@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <regex>
+#include <functional>
 
 
 #include <boost/any.hpp>
