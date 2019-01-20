@@ -21,6 +21,7 @@
 #include <regex>
 #include <functional>
 #include <cmath>
+#include <cassert>
 
 
 #include <boost/any.hpp>

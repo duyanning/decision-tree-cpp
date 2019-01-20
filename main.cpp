@@ -11,11 +11,11 @@ struct DecisionNode {
     int col;
     boost::any value;
     //unordered_map<boost::any, int> results; // 字典。无法通过编译。改用map
-    map<any, int> results; // 字典
+    map<string, int> results; // 字典
     DecisionNode* tb;
     DecisionNode* fb;
 
-    DecisionNode(int col, any value, map<any, int> results, DecisionNode* tb, DecisionNode* fb)
+    DecisionNode(int col, any value, map<string, int> results, DecisionNode* tb, DecisionNode* fb)
     {
         this->col = col;
         this->value = value;
@@ -23,6 +23,8 @@ struct DecisionNode {
         this->tb = tb;
         this->fb = fb;
     }
+
+    DecisionNode() = default;
 };
 
 bool is_numeric(any value)
@@ -137,6 +139,135 @@ void show_table(const Table& rows)
     cout << "table end\n";
 }
 
+// bool operator==(const any& a, const any& b)
+// {
+//     if (a.type() != b.type())
+//         return false;
+//     if (is_numeric(a)) {
+//         return any_cast<int>(a) == any_cast<int>(b);
+//     }
+
+//     return string(any_cast<const char*>(a)) == any_cast<const char*>(b);
+// }
+
+namespace boost {
+
+// 为了在std::set以及std::map中存储boost::any，需要能比较两个any
+// 因为any在boost这个名字空间里，所以提供的operator<也得放在boost这个名字空间中。放在全局名字空间中找不到。
+bool operator<(const any a, const any b)
+{
+    if (a.type() != b.type())
+        throw "type mismatch!";
+    if (is_numeric(a)) {
+        return any_cast<int>(a) < any_cast<int>(b);
+    }
+
+    return string(any_cast<const char*>(a)) < any_cast<const char*>(b);
+}
+
+    
+}
+
+
+ostream& operator<<(ostream& os, const any& a)
+{
+    if (is_numeric(a)) {
+        os << any_cast<int>(a);
+    }
+    else {
+        os << any_cast<const char*>(a);
+    }
+    return os;
+}
+
+
+DecisionNode* build_tree(Table rows, function<double (Table rows)> scoref = entropy)
+{
+    if (rows.empty())
+        return new DecisionNode;
+    double current_score = scoref(rows);
+
+    // Set up some variables to track the best criteria
+    double best_gain = 0.0;
+    pair<int, any> best_criteria;
+    pair<Table, Table> best_sets;
+
+    double column_count = rows[0].size() - 1;
+    for (int col = 0; col < column_count; ++col) {
+        // Generate the list of different values in this column
+        set<any> column_values;
+        for (auto row : rows) {
+            column_values.insert(row[col]);
+        }
+        // Now try dividing the rows up for each value in this column
+        for (auto value : column_values) {
+            auto set1set2 = divide_set(rows, col, value);
+            Table set1 = set1set2.first;
+            Table set2 = set1set2.second;
+            // Information gain
+            double p = double(set1.size()) / rows.size();
+            double gain = current_score - p * scoref(set1) - (1 - p) * scoref(set2);
+            if (gain > best_gain && set1.size() > 0 && set2.size() > 0) {
+                best_gain = gain;
+                best_criteria = make_pair(col, value);
+                best_sets = set1set2;
+            }
+        }
+    }
+
+    // Create the subbranches
+    if (best_gain > 0) {
+        DecisionNode* trueBranch = build_tree(best_sets.first);
+        DecisionNode* falseBranch = build_tree(best_sets.second);
+        return new DecisionNode(best_criteria.first, best_criteria.second, map<string, int>(), trueBranch, falseBranch);
+    }
+    else {
+        return new DecisionNode(0, 0, unique_counts(rows), nullptr, nullptr);
+    }
+
+}
+
+/*
+def printtree(tree,indent=''):
+  # Is this a leaf node?
+  if tree.results!=None:
+    print str(tree.results)
+  else:
+    # Print the criteria
+    print str(tree.col)+':'+str(tree.value)+'? '
+    # Print the branches
+    print indent+'T->',
+    printtree(tree.tb,indent+' ')
+    print indent+'F->',
+    printtree(tree.fb,indent+' ')
+ */
+void print_tree(DecisionNode* tree, string indent = " ")
+{
+    if (!tree->results.empty()) {
+        assert(tree->results.size() == 1); // 叶子节点
+        cout << "{";
+        for (auto i : tree->results) {
+            cout << i.first << " : " << i.second;
+        }
+        cout << "}" << endl;
+    }
+    else {
+        // 打印criteria
+        cout << tree->col << " : " << tree->value << " ? " << endl;
+        // 打印真假两个分支
+        cout << indent << "T-> ";
+        print_tree(tree->tb, indent + " ");
+        cout << indent << "F-> ";
+        print_tree(tree->fb, indent + " ");
+        
+    }
+}
+
+class A {
+    
+};
+
+
 int main()
 {
     Table my_data = {
@@ -167,5 +298,17 @@ int main()
     cout << entropy(my_data) << endl;
     cout << entropy(set1set2.first) << endl;
     //cout << entropy(set1set2.second) << endl;
+
+
+    // any a = 1;
+    // any b = "abc";
+    // a == b; // error
+    // a < b;
+
+    //set<A> s;
+    //s.insert(A());
+
+    auto tree = build_tree(my_data);
+    print_tree(tree);
     return 0;
 }
