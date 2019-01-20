@@ -5,6 +5,8 @@ using namespace boost;
 
 typedef vector<any> Row;
 typedef vector<Row> Table;
+typedef map<string, int> Result;
+
 
 // 决策树的节点
 struct DecisionNode {
@@ -25,6 +27,11 @@ struct DecisionNode {
     }
 
     DecisionNode() = default;
+
+    bool is_leaf()
+    {
+        return !results.empty();
+    }
 };
 
 bool is_numeric(any value)
@@ -166,8 +173,23 @@ bool operator<(const any a, const any b)
     return string(any_cast<const char*>(a)) < any_cast<const char*>(b);
 }
 
-    
+bool operator>=(const any a, const any b)
+{
+    return !(a < b);
 }
+    
+bool operator==(const any a, const any b)
+{
+    if (a.type() != b.type())
+        throw "type mismatch!";
+    if (is_numeric(a)) {
+        return any_cast<int>(a) == any_cast<int>(b);
+    }
+
+    return string(any_cast<const char*>(a)) == any_cast<const char*>(b);
+}
+    
+} // namespace boost
 
 
 ostream& operator<<(ostream& os, const any& a)
@@ -178,6 +200,17 @@ ostream& operator<<(ostream& os, const any& a)
     else {
         os << any_cast<const char*>(a);
     }
+    return os;
+}
+
+ostream& operator<<(ostream& os, const Result& r)
+{
+    os << "{";
+    for (auto i : r) {
+        cout << i.first << " : " << i.second;
+    }
+    os << "}" << endl;
+
     return os;
 }
 
@@ -249,11 +282,12 @@ void print_tree(DecisionNode* tree, string indent = " ")
 {
     if (!tree->results.empty()) { // 叶子节点
         assert(tree->results.size() == 1); 
-        cout << "{";
-        for (auto i : tree->results) {
-            cout << i.first << " : " << i.second;
-        }
-        cout << "}" << endl;
+        // cout << "{";
+        // for (auto i : tree->results) {
+        //     cout << i.first << " : " << i.second;
+        // }
+        // cout << "}" << endl;
+        cout << tree->results << endl;
     }
     else {
         // 打印criteria
@@ -265,6 +299,49 @@ void print_tree(DecisionNode* tree, string indent = " ")
         print_tree(tree->fb, indent + " ");
         
     }
+}
+
+
+/*
+def classify(observation,tree):
+  if tree.results!=None:
+    return tree.results
+  else:
+    v=observation[tree.col]
+    branch=None
+    if isinstance(v,int) or isinstance(v,float):
+      if v>=tree.value: branch=tree.tb
+      else: branch=tree.fb
+    else:
+      if v==tree.value: branch=tree.tb
+      else: branch=tree.fb
+  return classify(observation,branch)
+ */
+
+map<string, int> classify(Row observation, DecisionNode* tree)
+{
+    DecisionNode* branch = nullptr;
+    if (tree->is_leaf()) {
+        return tree->results;
+    }
+    else {
+        auto v = observation[tree->col];
+        if (is_numeric(v)) {
+            //if (any_cast<int>(v) >= tree.value)
+            if (v >= tree->value)
+                branch = tree->tb;
+            else
+                branch = tree->fb;
+        }
+        else {
+            if (v == tree->value)
+                branch = tree->tb;
+            else
+                branch = tree->fb;
+        }
+    }
+
+    return classify(observation, branch);
 }
 
 class A {
@@ -314,5 +391,9 @@ int main()
 
     auto tree = build_tree(my_data);
     print_tree(tree);
+
+    Row observation = {"(direct)", "USA", "yes", 5};
+    auto r = classify(observation, tree);
+    cout << r << endl;
     return 0;
 }
