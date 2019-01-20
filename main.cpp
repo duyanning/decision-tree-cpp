@@ -103,7 +103,8 @@ def entropy(rows):
  */
 double entropy(Table rows)
 {
-    function<double (double)> log2 = [](double x) { return log(x) / log(2); };
+    //function<double (double)> log2 = [](double x) { return log(x) / log(2); };
+    auto log2 = [](double x) { return log(x) / log(2); };
     auto results = unique_counts(rows);
     // 计算熵
     double ent = 0;
@@ -192,19 +193,22 @@ DecisionNode* build_tree(Table rows, function<double (Table rows)> scoref = entr
     pair<int, any> best_criteria;
     pair<Table, Table> best_sets;
 
+    // 用各个列的各种值对表格进行划分，试出效果最好的(列号，值)
     double column_count = rows[0].size() - 1;
-    for (int col = 0; col < column_count; ++col) {
-        // Generate the list of different values in this column
+    for (int col = 0; col < column_count; ++col) { // 各个列
+        // 把这一列各种不同的值收集到一个集合中(元素不重复)
         set<any> column_values;
         for (auto row : rows) {
             column_values.insert(row[col]);
         }
-        // Now try dividing the rows up for each value in this column
-        for (auto value : column_values) {
+
+        for (auto value : column_values) { // 此列的各种值
+            // 用此列与此值划分一下
             auto set1set2 = divide_set(rows, col, value);
             Table set1 = set1set2.first;
             Table set2 = set1set2.second;
-            // Information gain
+            
+            // 看看划分之后两个分表的熵的加权平均是不是比原来的表的熵降低了，是的话就划分
             double p = double(set1.size()) / rows.size();
             double gain = current_score - p * scoref(set1) - (1 - p) * scoref(set2);
             if (gain > best_gain && set1.size() > 0 && set2.size() > 0) {
@@ -215,13 +219,13 @@ DecisionNode* build_tree(Table rows, function<double (Table rows)> scoref = entr
         }
     }
 
-    // Create the subbranches
-    if (best_gain > 0) {
+    // 构造当前节点
+    if (best_gain > 0) {        // 如果可以继续划分，构造两棵子树
         DecisionNode* trueBranch = build_tree(best_sets.first);
         DecisionNode* falseBranch = build_tree(best_sets.second);
         return new DecisionNode(best_criteria.first, best_criteria.second, map<string, int>(), trueBranch, falseBranch);
     }
-    else {
+    else {                      // 如果无法继续划分，就作为叶子节点
         return new DecisionNode(0, 0, unique_counts(rows), nullptr, nullptr);
     }
 
@@ -243,8 +247,8 @@ def printtree(tree,indent=''):
  */
 void print_tree(DecisionNode* tree, string indent = " ")
 {
-    if (!tree->results.empty()) {
-        assert(tree->results.size() == 1); // 叶子节点
+    if (!tree->results.empty()) { // 叶子节点
+        assert(tree->results.size() == 1); 
         cout << "{";
         for (auto i : tree->results) {
             cout << i.first << " : " << i.second;
