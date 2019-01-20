@@ -3,7 +3,94 @@
 using namespace std;
 using namespace boost;
 
-typedef vector<any> Row;
+
+// 我们使用boost::any作为值的类型，为了在std::map、std::set等容器中存储any，需要为any提供一些支持。
+namespace boost {
+
+// 为了在std::set以及std::map中存储boost::any，需要能比较两个any
+// 因为any在boost这个名字空间里，所以提供的operator<也得放在boost这个名字空间中。放在全局名字空间中找不到。
+bool operator<(const any a, const any b)
+{
+    if (a.type() != b.type()) {
+        assert(false);
+        //throw "type mismatch!";
+    }
+
+    if (a.type() == typeid(int)) {
+        return any_cast<int>(a) < any_cast<int>(b);
+    }
+    else if (a.type() == typeid(const char*)) {
+        return string(any_cast<const char*>(a)) < any_cast<const char*>(b);
+    }
+    else if (a.type() == typeid(string)) {
+        return any_cast<string>(a) < any_cast<string>(b);
+    }
+    else {
+        assert(false);
+    }
+}
+
+bool operator>=(const any a, const any b)
+{
+    return !(a < b);
+}
+    
+bool operator==(const any a, const any b)
+{
+    if (a.type() == b.type()) {
+        if (a.type() == typeid(int))
+            return any_cast<int>(a) == any_cast<int>(b);
+        if (a.type() == typeid(const char*))
+            return string(any_cast<const char*>(a)) == any_cast<const char*>(b);
+        if (a.type() == typeid(string))
+            return any_cast<string>(a) == any_cast<string>(b);
+        
+        cout << a.type().name() << endl;
+        cout << b.type().name() << endl;
+        assert(false);
+    }
+    else {
+        if (a.type() == typeid(const char*)) {
+            if (b.type() == typeid(string)) {
+                return string(any_cast<const char*>(a)) == any_cast<string>(b);
+            }
+        }
+
+        if (a.type() == typeid(string)) {
+            if (b.type() == typeid(const char*)) {
+                return any_cast<string>(a) == any_cast<const char*>(b);
+            }
+        }
+    
+        cout << a.type().name() << endl;
+        cout << b.type().name() << endl;
+        //throw "type mismatch!";
+        assert(false);
+    }
+}
+    
+} // namespace boost
+
+ostream& operator<<(ostream& os, const any& a)
+{
+    if (a.type() == typeid(int)) {
+        os << any_cast<int>(a);
+    }
+    else if (a.type() == typeid(const char*)) {
+        os << any_cast<const char*>(a);
+    }
+    else if (a.type() == typeid(string)) {
+        os << any_cast<string>(a);
+    }
+    else {
+        assert(false);
+    }
+
+    return os;
+}
+
+
+typedef vector<any> Row;      
 typedef vector<Row> Table;
 typedef map<string, int> Result;
 
@@ -12,8 +99,8 @@ typedef map<string, int> Result;
 struct DecisionNode {
     int col;
     boost::any value;
-    //unordered_map<boost::any, int> results; // 字典。无法通过编译。改用map
-    map<string, int> results; // 字典
+    //unordered_map<boost::any, int> results; // 无法通过编译。改用map
+    map<string, int> results; 
     DecisionNode* tb;
     DecisionNode* fb;
 
@@ -127,80 +214,30 @@ double entropy(Table rows)
 
 void show_table(const Table& rows)
 {
-    cout << "\ntable begin\n";
+    cout << "\n================\n";
     for (auto row : rows) {
         cout << "[";
-        for (auto c : row) {
-            if (is_numeric(c)) {
-                //cout << "i ";
-                cout << any_cast<int>(c);
+        // for (auto c : row) {
+        //     cout << c << ", ";
+        // }
+
+        // 相比上面被注释掉的这段代码，下边的代码可以更好地输出逗号
+        for (auto iter = row.begin(); iter != row.end(); iter++) {
+            if (iter != row.begin())
                 cout << ", ";
-            }
-            else {
-                //cout << "s ";
-                cout << any_cast<const char*>(c);
-                cout << ", ";
-            }
+
+            bool isStr = false; // 控制输出字符串的引号
+            isStr = iter->type() == typeid(const char*) || iter->type() == typeid(string);
+            if (isStr)
+                cout << "'";
+            cout << *iter;
+            if (isStr)
+                cout << "'";
         }
+
         cout << "]\n";
     }
-    cout << "table end\n";
-}
-
-// bool operator==(const any& a, const any& b)
-// {
-//     if (a.type() != b.type())
-//         return false;
-//     if (is_numeric(a)) {
-//         return any_cast<int>(a) == any_cast<int>(b);
-//     }
-
-//     return string(any_cast<const char*>(a)) == any_cast<const char*>(b);
-// }
-
-namespace boost {
-
-// 为了在std::set以及std::map中存储boost::any，需要能比较两个any
-// 因为any在boost这个名字空间里，所以提供的operator<也得放在boost这个名字空间中。放在全局名字空间中找不到。
-bool operator<(const any a, const any b)
-{
-    if (a.type() != b.type())
-        throw "type mismatch!";
-    if (is_numeric(a)) {
-        return any_cast<int>(a) < any_cast<int>(b);
-    }
-
-    return string(any_cast<const char*>(a)) < any_cast<const char*>(b);
-}
-
-bool operator>=(const any a, const any b)
-{
-    return !(a < b);
-}
-    
-bool operator==(const any a, const any b)
-{
-    if (a.type() != b.type())
-        throw "type mismatch!";
-    if (is_numeric(a)) {
-        return any_cast<int>(a) == any_cast<int>(b);
-    }
-
-    return string(any_cast<const char*>(a)) == any_cast<const char*>(b);
-}
-    
-} // namespace boost
-
-
-ostream& operator<<(ostream& os, const any& a)
-{
-    if (is_numeric(a)) {
-        os << any_cast<int>(a);
-    }
-    else {
-        os << any_cast<const char*>(a);
-    }
-    return os;
+    cout << "^^^^^^^^^^^^^^^^" << " size: " << rows.size() << "\n";
 }
 
 ostream& operator<<(ostream& os, const Result& r)
@@ -209,7 +246,7 @@ ostream& operator<<(ostream& os, const Result& r)
     for (auto i : r) {
         cout << i.first << " : " << i.second;
     }
-    os << "}" << endl;
+    os << "}";
 
     return os;
 }
@@ -221,7 +258,6 @@ DecisionNode* build_tree(Table rows, function<double (Table rows)> scoref = entr
         return new DecisionNode;
     double current_score = scoref(rows);
 
-    // Set up some variables to track the best criteria
     double best_gain = 0.0;
     pair<int, any> best_criteria;
     pair<Table, Table> best_sets;
@@ -282,11 +318,6 @@ void print_tree(DecisionNode* tree, string indent = " ")
 {
     if (!tree->results.empty()) { // 叶子节点
         assert(tree->results.size() == 1); 
-        // cout << "{";
-        // for (auto i : tree->results) {
-        //     cout << i.first << " : " << i.second;
-        // }
-        // cout << "}" << endl;
         cout << tree->results << endl;
     }
     else {
@@ -327,7 +358,6 @@ map<string, int> classify(Row observation, DecisionNode* tree)
     else {
         auto v = observation[tree->col];
         if (is_numeric(v)) {
-            //if (any_cast<int>(v) >= tree.value)
             if (v >= tree->value)
                 branch = tree->tb;
             else
@@ -349,8 +379,23 @@ class A {
 };
 
 
+void test_any()
+{
+    any a1 = "abc";
+    any a2 = string("abc");
+    const string abc = "abc";
+    any a3 = abc;
+
+    a1 == a2; // const char* and string
+    a2 == a3;                   // string and const string, const好像不会被any记录
+    
+}
+
 int main()
 {
+
+    //test_any();
+    
     Table my_data = {
         {"slashdot", "USA", "yes", 18, "None"}, 
         {"google", "France", "yes", 23, "Premium"}, 
@@ -380,20 +425,12 @@ int main()
     cout << entropy(set1set2.first) << endl;
     //cout << entropy(set1set2.second) << endl;
 
-
-    // any a = 1;
-    // any b = "abc";
-    // a == b; // error
-    // a < b;
-
-    //set<A> s;
-    //s.insert(A());
-
     auto tree = build_tree(my_data);
     print_tree(tree);
 
     Row observation = {"(direct)", "USA", "yes", 5};
     auto r = classify(observation, tree);
     cout << r << endl;
-    return 0;
+
+
 }
