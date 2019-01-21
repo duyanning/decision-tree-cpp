@@ -94,7 +94,8 @@ ostream& operator<<(ostream& os, const any& a)
 
 typedef vector<any> Row;      
 typedef vector<Row> Table;
-typedef map<string, int> Result;
+//typedef map<string, int> Result;
+typedef map<string, double> Result;
 
 
 // 决策树的节点
@@ -102,11 +103,11 @@ struct DecisionNode {
     int col;
     boost::any value;
     //unordered_map<boost::any, int> results; // 无法通过编译。改用map
-    map<string, int> results; 
+    Result results; 
     DecisionNode* tb;
     DecisionNode* fb;
 
-    DecisionNode(int col, any value, map<string, int> results, DecisionNode* tb, DecisionNode* fb)
+    DecisionNode(int col, any value, Result results, DecisionNode* tb, DecisionNode* fb)
     {
         this->col = col;
         this->value = value;
@@ -171,9 +172,9 @@ def uniquecounts(rows):
   return results
 
  */
-map<string, int> unique_counts(Table rows)
+Result unique_counts(Table rows)
 {
-    map<string, int> results;   // 最后一列是结果，是字符串
+    Result results;   // 最后一列是结果，是字符串
     for (auto row : rows) {
         //string r = any_cast<const char*>(row[row.size() -1]);
         // todo: 下面这段太丑了
@@ -317,7 +318,7 @@ DecisionNode* build_tree(Table rows, function<double (Table rows)> scoref = entr
     if (best_gain > 0) {        // 如果可以继续划分，构造两棵子树
         DecisionNode* trueBranch = build_tree(best_sets.first);
         DecisionNode* falseBranch = build_tree(best_sets.second);
-        return new DecisionNode(best_criteria.first, best_criteria.second, map<string, int>(), trueBranch, falseBranch);
+        return new DecisionNode(best_criteria.first, best_criteria.second, Result(), trueBranch, falseBranch);
     }
     else {                      // 如果无法继续划分，就作为叶子节点
         return new DecisionNode(0, 0, unique_counts(rows), nullptr, nullptr);
@@ -374,7 +375,7 @@ def classify(observation,tree):
   return classify(observation,branch)
  */
 
-map<string, int> classify(Row observation, DecisionNode* tree)
+Result classify(Row observation, DecisionNode* tree)
 {
     DecisionNode* branch = nullptr;
     if (tree->is_leaf()) {
@@ -441,7 +442,8 @@ void prune(DecisionNode* tree, double mingain)
     //     tb,fb=[],[]
         vector<vector<any>> tb, fb;
     //     for v,c in tree.tb.results.items( ):
-    //         tb+=[[v]]*c  // 注意[1]*3为[1, 1, 1]，而[[1]]*3为[[1], [1], [1]]
+    //         tb+=[[v]]*c  // 注意[1]*3为[1, 1, 1]，而[[1]]*3为[[1], [1], [1]]。
+        // 此外，此处认定c是整数，但Result这个map中的value，自从引入mdclassify之后，就是double，可以是小数了。
         for (auto i : tree->tb->results) {
             auto v = i.first;
             auto c = i.second;
@@ -482,7 +484,7 @@ void prune(DecisionNode* tree, double mingain)
 
 // classify的修改版，可以处理缺失某些字段的observation
 // 对于一个observation，给出的结果可能是多个类型
-map<string, int> mdclassify(Row observation, DecisionNode* tree)
+Result mdclassify(Row observation, DecisionNode* tree)
 {
     DecisionNode* branch = nullptr;
     if (tree->is_leaf()) {
@@ -490,16 +492,16 @@ map<string, int> mdclassify(Row observation, DecisionNode* tree)
     }
     else {
         auto v = observation[tree->col];
-        cout << "compare " << tree->col << endl;
+        //cout << "compare " << tree->col << endl;
         if (v == "None") {      // observation的该字段缺失。(在observation用字符串"None"表示)
-            cout << "haha: " << tree->col << "=None" << endl;
+            //cout << "haha: " << tree->col << "=None" << endl;
             // tr,fr=mdclassify(observation,tree.tb),mdclassify(observation,tree.fb)
             auto tr = mdclassify(observation, tree->tb);
             auto fr = mdclassify(observation, tree->fb);
             // tcount=sum(tr.values( ))
-            int tcount = accumulate(tr.begin(), tr.end(), 0, [](int value, pair<string, int> x) { return value + x.second; });
+            double tcount = accumulate(tr.begin(), tr.end(), 0, [](double value, pair<string, double> x) { return value + x.second; });
             // fcount=sum(fr.values( ))
-            int fcount = accumulate(fr.begin(), fr.end(), 0, [](int value, pair<string, int> x) { return value + x.second; });
+            double fcount = accumulate(fr.begin(), fr.end(), 0, [](double value, pair<string, double> x) { return value + x.second; });
             // tw=float(tcount)/(tcount+fcount)
             double tw = double(tcount) / (tcount + fcount);
             // fw=float(fcount)/(tcount+fcount)
@@ -509,14 +511,14 @@ map<string, int> mdclassify(Row observation, DecisionNode* tree)
             // for k,v in tr.items( ): result[k]=v*tw
             for (auto i : tr) {
                 string k = i.first;
-                int v = i.second;
+                double v = i.second;
                 result[k] = v * tw;
             }
             // for k,v in fr.items( ): result[k]=v*fw
             for (auto i : fr) {
                 string k = i.first;
-                int v = i.second;
-                result[k] = v * fw;
+                double v = i.second;
+                result[k] += v * fw;
             }
             // return result
             return result;
@@ -602,8 +604,9 @@ int main()
 
     r = mdclassify({"google", "None", "yes", "None" }, tree); // "None"代表字段缺失
     cout << r << endl;
-    
 
+    r = mdclassify({"google", "France", "None", "None" }, tree); // "None"代表字段缺失
+    cout << r << endl;
 }
 
 
