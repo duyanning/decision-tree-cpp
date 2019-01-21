@@ -61,11 +61,13 @@ bool operator==(const any a, const any b)
                 return any_cast<string>(a) == any_cast<const char*>(b);
             }
         }
-    
-        cout << a.type().name() << endl;
-        cout << b.type().name() << endl;
-        //throw "type mismatch!";
-        assert(false);
+
+        return false;
+        
+        // cout << a.type().name() << endl;
+        // cout << b.type().name() << endl;
+        // //throw "type mismatch!";
+        // assert(false);
     }
 }
     
@@ -173,7 +175,18 @@ map<string, int> unique_counts(Table rows)
 {
     map<string, int> results;   // 最后一列是结果，是字符串
     for (auto row : rows) {
-        string r = any_cast<const char*>(row[row.size() -1]);
+        //string r = any_cast<const char*>(row[row.size() -1]);
+        // todo: 下面这段太丑了
+        string r;
+        if (row[row.size() -1].type() == typeid(const char*)) {
+            r = any_cast<const char*>(row[row.size() -1]);
+        }
+        else if (row[row.size() -1].type() == typeid(string)) {
+            r = any_cast<string>(row[row.size() -1]);
+        }
+        else {
+            assert(false);
+        }
         if (results.find(r) == results.end()) {
             results[r] = 0;
         }
@@ -243,8 +256,20 @@ void show_table(const Table& rows)
 ostream& operator<<(ostream& os, const Result& r)
 {
     os << "{";
-    for (auto i : r) {
-        cout << i.first << " : " << i.second;
+    // for (auto i : r) {
+    //     cout << i.first << " : " << i.second;
+    // }
+    for (auto iter = r.begin(); iter != r.end(); iter++) {
+        if (iter != r.begin())
+            cout << ", ";
+
+        // bool isStr = false; // 控制输出字符串的引号
+        // isStr = iter->first.type() == typeid(const char*) || iter->first.type() == typeid(string);
+        // if (isStr)
+        //     cout << "'";
+        cout << iter->first << " : " << iter->second;
+        // if (isStr)
+        //     cout << "'";
     }
     os << "}";
 
@@ -317,7 +342,7 @@ def printtree(tree,indent=''):
 void print_tree(DecisionNode* tree, string indent = " ")
 {
     if (!tree->results.empty()) { // 叶子节点
-        assert(tree->results.size() == 1); 
+        //assert(tree->results.size() == 1); 
         cout << tree->results << endl;
     }
     else {
@@ -374,9 +399,146 @@ map<string, int> classify(Row observation, DecisionNode* tree)
     return classify(observation, branch);
 }
 
-class A {
+
+/*
+def prune(tree,mingain):
+    # If the branches aren't leaves, then prune them
+    if tree.tb.results==None:
+        prune(tree.tb,mingain)
+    if tree.fb.results==None:
+        prune(tree.fb,mingain)
+    # If both the subbranches are now leaves, see if they
+    # should merged
+    if tree.tb.results!=None and tree.fb.results!=None:
+        # Build a combined dataset
+        tb,fb=[],[]
+        for v,c in tree.tb.results.items( ):
+            tb+=[[v]]*c
+        for v,c in tree.fb.results.items( ):
+            fb+=[[v]]*c
+        # Test the reduction in entropy
+        delta=entropy(tb+fb)-(entropy(tb)+entropy(fb)/2)
+        if delta<mingain:
+            # Merge the branches
+            tree.tb,tree.fb=None,None
+            tree.results=uniquecounts(tb+fb)
+ */
+void prune(DecisionNode* tree, double mingain)
+{
+    // If the branches aren't leaves, then prune them
+    // if tree.tb.results==None:
+    //     prune(tree.tb,mingain)
+    if (tree->tb->results.empty())
+        prune(tree->tb, mingain);
+    // if tree.fb.results==None:
+    //     prune(tree.fb,mingain)
+    if (tree->fb->results.empty())
+        prune(tree->fb, mingain);
+    // If both the subbranches are now leaves, see if they should merged
+    // if tree.tb.results!=None and tree.fb.results!=None:
+    if (!tree->tb->results.empty() && !tree->fb->results.empty()) {
+        // Build a combined dataset
+    //     tb,fb=[],[]
+        vector<vector<any>> tb, fb;
+    //     for v,c in tree.tb.results.items( ):
+    //         tb+=[[v]]*c  // 注意[1]*3为[1, 1, 1]，而[[1]]*3为[[1], [1], [1]]
+        for (auto i : tree->tb->results) {
+            auto v = i.first;
+            auto c = i.second;
+            for (int n = 0; n < c; ++n) {
+                vector<any> row;
+                row.push_back(v);
+                tb.push_back(row);
+            }
+        }
+    //     for v,c in tree.fb.results.items( ):
+    //         fb+=[[v]]*c
+        for (auto i : tree->fb->results) {
+            auto v = i.first;
+            auto c = i.second;
+            for (int n = 0; n < c; ++n) {
+                vector<any> row;
+                row.push_back(v);
+                fb.push_back(row);
+            }
+        }
+        // Test the reduction in entropy
+    //     delta=entropy(tb+fb)-(entropy(tb)+entropy(fb)/2)
+        vector<vector<any>> tbfb = tb;
+        tbfb.insert(tbfb.end(), fb.begin(), fb.end()); 
+        double delta = entropy(tbfb) - (entropy(tb) + entropy(fb)) / 2;
+    //     if delta<mingain:
+        if (delta < mingain) {
+            // Merge the branches
+    //         tree.tb,tree.fb=None,None
+            tree->tb = nullptr;
+            tree->fb = nullptr;
+    //         tree.results=uniquecounts(tb+fb)
+            tree->results = unique_counts(tbfb);
+        }
+    }
     
-};
+}
+
+// classify的修改版，可以处理缺失某些字段的observation
+// 对于一个observation，给出的结果可能是多个类型
+map<string, int> mdclassify(Row observation, DecisionNode* tree)
+{
+    DecisionNode* branch = nullptr;
+    if (tree->is_leaf()) {
+        return tree->results;
+    }
+    else {
+        auto v = observation[tree->col];
+        cout << "compare " << tree->col << endl;
+        if (v == "None") {      // observation的该字段缺失。(在observation用字符串"None"表示)
+            cout << "haha: " << tree->col << "=None" << endl;
+            // tr,fr=mdclassify(observation,tree.tb),mdclassify(observation,tree.fb)
+            auto tr = mdclassify(observation, tree->tb);
+            auto fr = mdclassify(observation, tree->fb);
+            // tcount=sum(tr.values( ))
+            int tcount = accumulate(tr.begin(), tr.end(), 0, [](int value, pair<string, int> x) { return value + x.second; });
+            // fcount=sum(fr.values( ))
+            int fcount = accumulate(fr.begin(), fr.end(), 0, [](int value, pair<string, int> x) { return value + x.second; });
+            // tw=float(tcount)/(tcount+fcount)
+            double tw = double(tcount) / (tcount + fcount);
+            // fw=float(fcount)/(tcount+fcount)
+            double fw = double(fcount) / (tcount + fcount);
+            // result={}
+            Result result;
+            // for k,v in tr.items( ): result[k]=v*tw
+            for (auto i : tr) {
+                string k = i.first;
+                int v = i.second;
+                result[k] = v * tw;
+            }
+            // for k,v in fr.items( ): result[k]=v*fw
+            for (auto i : fr) {
+                string k = i.first;
+                int v = i.second;
+                result[k] = v * fw;
+            }
+            // return result
+            return result;
+        }
+        else {
+            if (is_numeric(v)) {
+                if (v >= tree->value)
+                    branch = tree->tb;
+                else
+                    branch = tree->fb;
+            }
+            else {
+                if (v == tree->value)
+                    branch = tree->tb;
+                else
+                    branch = tree->fb;
+            }
+        }
+    }
+
+    return mdclassify(observation, branch);
+}
 
 
 void test_any()
@@ -432,5 +594,39 @@ int main()
     auto r = classify(observation, tree);
     cout << r << endl;
 
+    // prune(tree, 1.0);
+    // print_tree(tree);
+
+    // r = mdclassify(observation, tree); // 看下mdclassify在处理无缺失字段时的表现是否跟classify一致
+    // cout << r << endl;
+
+    r = mdclassify({"google", "None", "yes", "None" }, tree); // "None"代表字段缺失
+    cout << r << endl;
+    
 
 }
+
+
+// 下边这段代码可以从map中提取出所有keys，将first改为second就可以提取所有values。可以完美模拟python
+template<template <typename...> class MAP, class KEY, class VALUE>
+std::vector<KEY>
+keys(const MAP<KEY, VALUE>& map)
+{
+    std::vector<KEY> result;
+    result.reserve(map.size());
+    for(const auto& it : map){
+        result.emplace_back(it.first);
+    }
+    return result;
+}
+
+
+/*
+typid乱码
+#include <cxxabi.h>
+realname = abi::__cxa_demangle(e.what(), 0, 0, &status);
+参考 https://gcc.gnu.org/onlinedocs/libstdc++/manual/ext_demangling.html
+
+或者用工具
+c++filt -t symbol
+ */
