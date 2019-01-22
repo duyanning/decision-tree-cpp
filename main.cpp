@@ -78,6 +78,9 @@ ostream& operator<<(ostream& os, const any& a)
     if (a.type() == typeid(int)) {
         os << any_cast<int>(a);
     }
+    else if (a.type() == typeid(double)) {
+        os << any_cast<double>(a);
+    }
     else if (a.type() == typeid(const char*)) {
         os << any_cast<const char*>(a);
     }
@@ -85,6 +88,7 @@ ostream& operator<<(ostream& os, const any& a)
         os << any_cast<string>(a);
     }
     else {
+        cout << "type: " << a.type().name() << endl;
         assert(false);
     }
 
@@ -498,10 +502,18 @@ Result mdclassify(Row observation, DecisionNode* tree)
             // tr,fr=mdclassify(observation,tree.tb),mdclassify(observation,tree.fb)
             auto tr = mdclassify(observation, tree->tb);
             auto fr = mdclassify(observation, tree->fb);
+            // cout << "tr: " << tr << endl;
+            // cout << "fr: " << fr << endl;
             // tcount=sum(tr.values( ))
-            double tcount = accumulate(tr.begin(), tr.end(), 0, [](double value, pair<string, double> x) { return value + x.second; });
+            double tcount = accumulate(tr.begin(), tr.end(), 0.0, [](double value, pair<string, double> x) { return value + x.second; });
             // fcount=sum(fr.values( ))
-            double fcount = accumulate(fr.begin(), fr.end(), 0, [](double value, pair<string, double> x) { return value + x.second; });
+            double fcount = accumulate(fr.begin(), fr.end(), 0.0, [](double value, pair<string, double> x) { return value + x.second; });
+            // 注意：用accumulate，把0.0写成0,会导致结果被截断为int
+            // double fcount = accumulate(fr.begin(), fr.end(), 0.0, [](double value, pair<string, double> x) {
+            //         cout << "x: " << x.second << endl;
+            //         return value + x.second; });
+            // cout << "tcount: " << tcount << endl;
+            // cout << "fcount: " << fcount << endl;
             // tw=float(tcount)/(tcount+fcount)
             double tw = double(tcount) / (tcount + fcount);
             // fw=float(fcount)/(tcount+fcount)
@@ -520,6 +532,7 @@ Result mdclassify(Row observation, DecisionNode* tree)
                 double v = i.second;
                 result[k] += v * fw;
             }
+            // cout << "result: " << result << endl;
             // return result
             return result;
         }
@@ -536,10 +549,10 @@ Result mdclassify(Row observation, DecisionNode* tree)
                 else
                     branch = tree->fb;
             }
+            return mdclassify(observation, branch);
         }
     }
 
-    return mdclassify(observation, branch);
 }
 
 
