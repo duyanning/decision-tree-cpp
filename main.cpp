@@ -431,34 +431,25 @@ def prune(tree,mingain):
 void prune(DecisionNode* tree, double mingain)
 {
     // If the branches aren't leaves, then prune them
-    // if tree.tb.results==None:
-    //     prune(tree.tb,mingain)
     if (tree->tb->results.empty())
         prune(tree->tb, mingain);
-    // if tree.fb.results==None:
-    //     prune(tree.fb,mingain)
     if (tree->fb->results.empty())
         prune(tree->fb, mingain);
     // If both the subbranches are now leaves, see if they should merged
-    // if tree.tb.results!=None and tree.fb.results!=None:
     if (!tree->tb->results.empty() && !tree->fb->results.empty()) {
         // Build a combined dataset
-    //     tb,fb=[],[]
         vector<vector<any>> tb, fb;
-    //     for v,c in tree.tb.results.items( ):
-    //         tb+=[[v]]*c  // 注意[1]*3为[1, 1, 1]，而[[1]]*3为[[1], [1], [1]]。
-        // 此外，此处认定c是整数，但Result这个map中的value，自从引入mdclassify之后，就是double，可以是小数了。
         for (auto i : tree->tb->results) {
             auto v = i.first;
-            auto c = i.second;
-            for (int n = 0; n < c; ++n) {
+            auto c = i.second;  
+
+            for (int n = 0; n < c; ++n) { // 此处认定c是整数，但Result这个map中的value，自从引入mdclassify之后，就是double，可以是小数了。
                 vector<any> row;
                 row.push_back(v);
                 tb.push_back(row);
             }
         }
-    //     for v,c in tree.fb.results.items( ):
-    //         fb+=[[v]]*c
+
         for (auto i : tree->fb->results) {
             auto v = i.first;
             auto c = i.second;
@@ -469,17 +460,13 @@ void prune(DecisionNode* tree, double mingain)
             }
         }
         // Test the reduction in entropy
-    //     delta=entropy(tb+fb)-(entropy(tb)+entropy(fb)/2)
         vector<vector<any>> tbfb = tb;
         tbfb.insert(tbfb.end(), fb.begin(), fb.end()); 
         double delta = entropy(tbfb) - (entropy(tb) + entropy(fb)) / 2;
-    //     if delta<mingain:
         if (delta < mingain) {
             // Merge the branches
-    //         tree.tb,tree.fb=None,None
             tree->tb = nullptr;
             tree->fb = nullptr;
-    //         tree.results=uniquecounts(tb+fb)
             tree->results = unique_counts(tbfb);
         }
     }
@@ -496,44 +483,25 @@ Result mdclassify(Row observation, DecisionNode* tree)
     }
     else {
         auto v = observation[tree->col];
-        //cout << "compare " << tree->col << endl;
         if (v == "None") {      // observation的该字段缺失。(在observation用字符串"None"表示)
-            //cout << "haha: " << tree->col << "=None" << endl;
-            // tr,fr=mdclassify(observation,tree.tb),mdclassify(observation,tree.fb)
             auto tr = mdclassify(observation, tree->tb);
             auto fr = mdclassify(observation, tree->fb);
-            // cout << "tr: " << tr << endl;
-            // cout << "fr: " << fr << endl;
-            // tcount=sum(tr.values( ))
             double tcount = accumulate(tr.begin(), tr.end(), 0.0, [](double value, pair<string, double> x) { return value + x.second; });
-            // fcount=sum(fr.values( ))
             double fcount = accumulate(fr.begin(), fr.end(), 0.0, [](double value, pair<string, double> x) { return value + x.second; });
             // 注意：用accumulate，把0.0写成0,会导致结果被截断为int
-            // double fcount = accumulate(fr.begin(), fr.end(), 0.0, [](double value, pair<string, double> x) {
-            //         cout << "x: " << x.second << endl;
-            //         return value + x.second; });
-            // cout << "tcount: " << tcount << endl;
-            // cout << "fcount: " << fcount << endl;
-            // tw=float(tcount)/(tcount+fcount)
             double tw = double(tcount) / (tcount + fcount);
-            // fw=float(fcount)/(tcount+fcount)
             double fw = double(fcount) / (tcount + fcount);
-            // result={}
             Result result;
-            // for k,v in tr.items( ): result[k]=v*tw
             for (auto i : tr) {
                 string k = i.first;
                 double v = i.second;
                 result[k] = v * tw;
             }
-            // for k,v in fr.items( ): result[k]=v*fw
             for (auto i : fr) {
                 string k = i.first;
                 double v = i.second;
                 result[k] += v * fw;
             }
-            // cout << "result: " << result << endl;
-            // return result
             return result;
         }
         else {
@@ -609,8 +577,8 @@ int main()
     auto r = classify(observation, tree);
     cout << r << endl;
 
-    // prune(tree, 1.0);
-    // print_tree(tree);
+    prune(tree, 1.0);
+    print_tree(tree);
 
     // r = mdclassify(observation, tree); // 看下mdclassify在处理无缺失字段时的表现是否跟classify一致
     // cout << r << endl;
