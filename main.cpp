@@ -136,6 +136,43 @@ bool is_numeric(any value)
         return false;
 }
 
+
+// 下边这段代码可以从map中提取出所有keys，将first改为second就可以提取所有values。可以完美模拟python
+template<template <typename...> class MAP, class KEY, class VALUE>
+std::vector<KEY>
+keys(const MAP<KEY, VALUE>& map)
+{
+    std::vector<KEY> result;
+    result.reserve(map.size());
+    for(const auto& it : map){
+        result.emplace_back(it.first);
+    }
+    return result;
+}
+
+template<template <typename...> class MAP, class KEY, class VALUE>
+std::vector<VALUE>
+values(const MAP<KEY, VALUE>& map)
+{
+    std::vector<VALUE> result;
+    result.reserve(map.size());
+    for(const auto& it : map){
+        result.emplace_back(it.second);
+    }
+    return result;
+}
+
+template <typename T, typename C>
+T sum(C c)
+{
+    
+    T s = accumulate(c.begin(), c.end(), T());
+    return s;
+
+}
+
+
+
 pair<Table, Table> divide_set(Table rows, int column, any value)
 {
     function<bool (const Row&)> split_function;
@@ -221,12 +258,16 @@ double entropy(Table rows)
     // 计算熵
     double ent = 0;
 
-    for (auto r : results) {
-        //cout << r.second << endl;
-        double p = double(r.second) / rows.size();
+    // for (auto r : results) {
+    //     //cout << r.second << endl;
+    //     double p = double(r.second) / rows.size();
+    //     ent = ent - p * log2(p);
+    // }
+
+    for (auto r : keys(results)) {
+        double p = double(results[r]) / rows.size();
         ent = ent - p * log2(p);
     }
-
     return ent;
 }
 
@@ -486,9 +527,8 @@ Result mdclassify(Row observation, DecisionNode* tree)
         if (v == "None") {      // observation的该字段缺失。(在observation用字符串"None"表示)
             auto tr = mdclassify(observation, tree->tb);
             auto fr = mdclassify(observation, tree->fb);
-            double tcount = accumulate(tr.begin(), tr.end(), 0.0, [](double value, pair<string, double> x) { return value + x.second; });
-            double fcount = accumulate(fr.begin(), fr.end(), 0.0, [](double value, pair<string, double> x) { return value + x.second; });
-            // 注意：用accumulate，把0.0写成0,会导致结果被截断为int
+            double tcount = sum<double>(values(tr));
+            double fcount = sum<double>(values(fr));
             double tw = double(tcount) / (tcount + fcount);
             double fw = double(fcount) / (tcount + fcount);
             Result result;
@@ -591,18 +631,7 @@ int main()
 }
 
 
-// 下边这段代码可以从map中提取出所有keys，将first改为second就可以提取所有values。可以完美模拟python
-template<template <typename...> class MAP, class KEY, class VALUE>
-std::vector<KEY>
-keys(const MAP<KEY, VALUE>& map)
-{
-    std::vector<KEY> result;
-    result.reserve(map.size());
-    for(const auto& it : map){
-        result.emplace_back(it.first);
-    }
-    return result;
-}
+
 
 
 /*
