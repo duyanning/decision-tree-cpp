@@ -172,6 +172,12 @@ T sum(C c)
 }
 
 
+template <typename C>
+int len(C c)
+{
+    return c.size();
+}
+
 
 pair<Table, Table> divide_set(Table rows, int column, any value)
 {
@@ -563,6 +569,22 @@ Result mdclassify(Row observation, DecisionNode* tree)
 
 }
 
+
+double variance(Table rows)
+{
+    if (rows.empty())
+        return 0;
+    // data=[float(row[len(row)-1]) for row in rows]
+    vector<double> data;
+    for (auto row : rows) {
+        data.push_back(any_cast<double>(row[len(row) - 1]));
+    }
+    double mean = sum<double>(data) / len(data);
+    // variance=sum([(d-mean)**2 for d in data])/len(data)
+    double variance = accumulate(data.begin(), data.end(), 0.0, [&](double sum, double d) { return sum + (d - mean) * (d - mean); }) / len(data);
+    return variance;
+    
+}
 
 void test_any()
 {
